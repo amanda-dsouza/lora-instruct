@@ -63,6 +63,7 @@ class TrainConfig:
     group_by_length: bool = False
     resume_from_checkpoint: Optional[str] = None
     prompt_template_name: str = "alpaca"
+    qlora: bool = True
 
 
 class TokenizerHelper:
@@ -199,6 +200,8 @@ def train(
     group_by_length: bool = False,  # faster, but produces an odd training loss curve
     resume_from_checkpoint: str = None,  # either training checkpoint or final adapter
     prompt_template_name: str = "alpaca",  # Prompt template to use, default to Alpaca
+    qlora: bool = True,
+    wandb_run_name: str = "wandb_run",
 ):
     if int(os.environ.get("LOCAL_RANK", 0)) == 0:
         print(
@@ -221,6 +224,8 @@ def train(
             f"group_by_length: {group_by_length}\n"
             f"resume_from_checkpoint: {resume_from_checkpoint or False}\n"
             f"prompt template: {prompt_template_name}\n"
+            f"qlora: {qlora}\n"
+            f"wandb_run_name: {wandb_run_name}\n"
         )
     assert (
         base_model
@@ -241,7 +246,16 @@ def train(
     #
     # Model loading
     #
-    quantization_config = BitsAndBytesConfig(llm_int8_enable_fp32_cpu_offload=True)
+    if qlora:
+        ### Added for QLoRA
+        quantization_config = BitsAndBytesConfig(
+            load_in_4bit=True,
+            bnb_4bit_use_double_quant=True,
+            bnb_4bit_quant_type="nf4",
+            bnb_4bit_compute_dtype=torch.bfloat16
+        )
+    else:
+        quantization_config = BitsAndBytesConfig(llm_int8_enable_fp32_cpu_offload=True)
     model = AutoModelForCausalLM.from_pretrained(
         # 'mosaicml/mpt-7b',
         base_model,
